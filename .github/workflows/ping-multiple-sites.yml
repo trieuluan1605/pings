@@ -1,0 +1,42 @@
+name: Ping Multiple Sites with Slack Alerts
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping all websites
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          urls=(
+            "https://ai-assistant-9it8.onrender.com"
+            "https://trieuluan.onrender.com"
+          )
+
+          has_error=0
+          error_log=""
+
+          for url in "${urls[@]}"
+          do
+            echo "Pinging $url"
+            status=$(curl -m 10 -s -o /dev/null -w "%{http_code}" "$url")
+            if [ "$status" != "200" ]; then
+              has_error=1
+              error_log+="• *$url* trả về HTTP $status\n"
+            fi
+          done
+
+          if [ "$has_error" = "1" ]; then
+            payload=$(jq -n \
+              --arg text "*Cảnh báo Ping thất bại*\n$error_log" \
+              '{text: $text}')
+            curl -X POST -H 'Content-type: application/json' \
+              --data "$payload" \
+              "$SLACK_WEBHOOK_URL"
+            exit 1
+          fi
